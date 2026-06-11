@@ -1,0 +1,144 @@
+{
+  "name": "Alcovia Session Notification (Deduplicated)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "alcovia-session",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "alcovia-session"
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nconst id = $input.first().json.sessionId;\n\nif (!id) {\n  return [{ json: { skip: true, reason: 'no_session_id' } }];\n}\n\nif (store[id]) {\n  return [{ json: { skip: true, sessionId: id, reason: 'DUPLICATE_SKIPPED', firstProcessed: store[id] } }];\n}\n\nstore[id] = Date.now();\nreturn [{ json: { skip: false, sessionId: id, streak: $input.first().json.streak, coins: $input.first().json.coins, deviceId: $input.first().json.deviceId } }];"
+      },
+      "id": "dedup-node",
+      "name": "Dedup Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-1",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-node",
+      "name": "Is New Session?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webhook.site/YOUR_WEBHOOK_SITE_ID",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message\": \"Streak now {{ $json.streak }} days — you've earned {{ $json.coins }} coins.\",\n  \"sessionId\": \"{{ $json.sessionId }}\",\n  \"deviceId\": \"{{ $json.deviceId }}\"\n}",
+        "options": {}
+      },
+      "id": "http-send-node",
+      "name": "Send Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [910, 200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "DUPLICATE_SKIPPED"
+            },
+            {
+              "name": "sessionId",
+              "value": "={{ $json.sessionId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-dup-node",
+      "name": "Log Duplicate",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [910, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Dedup Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Check": {
+      "main": [
+        [
+          {
+            "node": "Is New Session?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is New Session?": {
+      "main": [
+        [
+          {
+            "node": "Send Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0
+}
