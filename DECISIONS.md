@@ -124,18 +124,20 @@ Because the merge function is commutative, applying events A then B produces the
 
 ## Conflict Resolution
 
-Strategy: **Last-Writer-Wins (LWW) with logical version + lexicographic deviceId tiebreak.**
+Strategy: **Last-Writer-Wins (LWW) with logical version numbers + lexicographic deviceId tiebreak.**
+
+> **Important**: Conflict resolution uses **logical version numbers only** — monotonically incrementing integers scoped per entity, incremented on every write. **Device clocks (wall-clock timestamps) are never used for merge decisions.** The `createdAt` field exists purely for human-readable display; it is never read, compared, or branched on in any merge or conflict resolution path. This design is immune to clock skew between devices.
 
 Rules applied on both backend AND frontend:
-1. `incoming.version > existing.version` → incoming wins (higher version is newer)
-2. `incoming.version == existing.version` → `incoming.deviceId > existing.updatedByDevice` (lexicographic) → incoming wins
-3. Otherwise → existing wins
+1. `incoming.version > existing.version` → incoming wins (higher logical version)
+2. `incoming.version == existing.version` → `incoming.deviceId > existing.updatedByDevice` (lexicographic comparison) → incoming wins (deterministic tiebreak)
+3. Otherwise → existing wins (incoming is stale)
 
-This is applied in:
+This is applied identically in:
 - `backend/src/routes.ts` — TASK_STATUS_CHANGED handler
 - `frontend/src/storage/localMutations.ts` — `applyTaskUpdate()`
 
-Wall-clock timestamps (`createdAt`) are stored for display but **never** consulted during merge.
+Wall-clock timestamps (`createdAt`) are stored for display but **never** consulted during merge. No code path in the sync engine, backend event handler, or local mutation layer reads `createdAt` for ordering or conflict resolution.
 
 ## Backend Idempotency
 
