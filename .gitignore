@@ -7,3 +7,4 @@ dist/
 web-build/
 *.db-shm
 *.db-wal
+screenshots/
